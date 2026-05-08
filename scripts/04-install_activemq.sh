@@ -44,6 +44,7 @@ main() {
     # Configure ActiveMQ
     configure_permissions
     configure_credentials
+    configure_jetty_binding
     create_systemd_service
     
     # Enable service
@@ -243,6 +244,31 @@ EOF
     sudo chown "${ALFRESCO_USER}:${ALFRESCO_GROUP}" "$users_file" "$groups_file" "$jetty_users_file"
     
     log_info "Credentials configured"
+}
+
+# -----------------------------------------------------------------------------
+# Configure Jetty Bind Address
+# -----------------------------------------------------------------------------
+configure_jetty_binding() {
+    log_step "Configuring ActiveMQ web console bind address..."
+
+    local jetty_xml="${ALFRESCO_HOME}/activemq/conf/jetty.xml"
+
+    if [ ! -f "$jetty_xml" ]; then
+        log_warn "jetty.xml not found, skipping bind address configuration"
+        return 0
+    fi
+
+    backup_file "$jetty_xml"
+
+    # ActiveMQ's default jetty.xml binds to 127.0.0.1; change to 0.0.0.0 so
+    # the web console is reachable from outside the host (e.g. on EC2).
+    if sudo grep -q '127.0.0.1' "$jetty_xml"; then
+        sudo sed -i 's/127\.0\.0\.1/0.0.0.0/g' "$jetty_xml"
+        log_info "Web console bind address changed from 127.0.0.1 to 0.0.0.0"
+    else
+        log_info "Web console is already bound to a non-loopback address"
+    fi
 }
 
 # -----------------------------------------------------------------------------
