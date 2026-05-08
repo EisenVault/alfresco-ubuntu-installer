@@ -105,6 +105,18 @@ install_postgresql() {
     # Update package list
     log_info "Updating package list..."
     sudo apt-get update
+
+    # Install PostgreSQL common utilities
+    log_info "Installing postgresql-common..."
+    sudo apt install -y postgresql-common
+
+    # Add official PostgreSQL PGDG repository
+    log_info "Configuring PostgreSQL PGDG repository..."
+    sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+
+    # Refresh package index after adding repository
+    log_info "Refreshing package list after PGDG setup..."
+    sudo apt-get update
     
     # Install PostgreSQL
     log_info "Installing PostgreSQL packages..."
