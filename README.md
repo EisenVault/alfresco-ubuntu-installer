@@ -26,7 +26,7 @@ Automated installation scripts for deploying **Alfresco Content Services Communi
 
 ## Overview
 
-This project provides a collection of bash scripts to automate the installation and configuration of Alfresco Content Services on Ubuntu 22.04/24.04 LTS.
+This project provides a collection of bash scripts to automate the installation and configuration of Alfresco Content Services on Ubuntu 22.04/24.04/26.04 LTS.
 
 ### Architecture
 
