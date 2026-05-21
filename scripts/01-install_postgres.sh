@@ -130,8 +130,10 @@ install_postgresql() {
 # -----------------------------------------------------------------------------
 configure_authentication() {
     log_step "Configuring PostgreSQL authentication..."
-    
-    local pg_hba_file="/etc/postgresql/${POSTGRESQL_VERSION}/main/pg_hba.conf"
+
+    local pg_version
+    pg_version=$(psql --version | grep -oP '\d+' | head -1)
+    local pg_hba_file="/etc/postgresql/${pg_version}/main/pg_hba.conf"
     
     if [ ! -f "$pg_hba_file" ]; then
         log_error "pg_hba.conf not found at: $pg_hba_file"
@@ -235,11 +237,13 @@ create_alfresco_database() {
 # -----------------------------------------------------------------------------
 configure_postgresql_memory() {
     log_step "Configuring PostgreSQL memory settings..."
-    
+
     # Calculate memory allocation
     calculate_memory_allocation
-    
-    local pg_conf="/etc/postgresql/${POSTGRESQL_VERSION}/main/postgresql.conf"
+
+    local pg_version
+    pg_version=$(psql --version | grep -oP '\d+' | head -1)
+    local pg_conf="/etc/postgresql/${pg_version}/main/postgresql.conf"
     
     if [ ! -f "$pg_conf" ]; then
         log_warn "postgresql.conf not found, skipping memory configuration"
