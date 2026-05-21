@@ -401,7 +401,7 @@ display_summary() {
     log_info "  Solr Admin:           http://${SOLR_HOST:-localhost}:${SOLR_PORT:-8983}/solr/"
     log_info "  ActiveMQ Console:     http://${ACTIVEMQ_HOST:-localhost}:${ACTIVEMQ_WEBCONSOLE_PORT:-8161}/"
     log_info ""
-    log_info "Default credentials: admin / admin"
+    log_info "Default credentials: admin / ${ALFRESCO_ADMIN_PASSWORD}"
     log_info ""
     
     # Check if any service failed
