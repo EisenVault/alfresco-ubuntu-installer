@@ -317,6 +317,8 @@ calculate_memory_allocation() {
         MEM_TOMCAT_XMS=1024
         MEM_TOMCAT_XMX=2048
         MEM_SOLR=512
+        MEM_OPENSEARCH=512
+        MEM_BATCH_INDEXER=512
         MEM_TRANSFORM=512
         MEM_ACTIVEMQ=256
         MEM_POSTGRES_SHARED=256
@@ -329,6 +331,8 @@ calculate_memory_allocation() {
         MEM_TOMCAT_XMS=2048
         MEM_TOMCAT_XMX=3072
         MEM_SOLR=1024
+        MEM_OPENSEARCH=1024
+        MEM_BATCH_INDEXER=512
         MEM_TRANSFORM=768
         MEM_ACTIVEMQ=512
         MEM_POSTGRES_SHARED=512
@@ -341,6 +345,8 @@ calculate_memory_allocation() {
         MEM_TOMCAT_XMS=4096
         MEM_TOMCAT_XMX=6144
         MEM_SOLR=2048
+        MEM_OPENSEARCH=2048
+        MEM_BATCH_INDEXER=768
         MEM_TRANSFORM=1024
         MEM_ACTIVEMQ=512
         MEM_POSTGRES_SHARED=1024
@@ -353,6 +359,8 @@ calculate_memory_allocation() {
         MEM_TOMCAT_XMS=8192
         MEM_TOMCAT_XMX=12288
         MEM_SOLR=4096
+        MEM_OPENSEARCH=4096
+        MEM_BATCH_INDEXER=1024
         MEM_TRANSFORM=2048
         MEM_ACTIVEMQ=1024
         MEM_POSTGRES_SHARED=2048
@@ -365,6 +373,8 @@ calculate_memory_allocation() {
         MEM_TOMCAT_XMS=16384
         MEM_TOMCAT_XMX=24576
         MEM_SOLR=8192
+        MEM_OPENSEARCH=8192
+        MEM_BATCH_INDEXER=2048
         MEM_TRANSFORM=4096
         MEM_ACTIVEMQ=2048
         MEM_POSTGRES_SHARED=4096
@@ -375,6 +385,8 @@ calculate_memory_allocation() {
     MEM_TOMCAT_XMS="${TOMCAT_XMS_MB:-$MEM_TOMCAT_XMS}"
     MEM_TOMCAT_XMX="${TOMCAT_XMX_MB:-$MEM_TOMCAT_XMX}"
     MEM_SOLR="${SOLR_HEAP_MB:-$MEM_SOLR}"
+    MEM_OPENSEARCH="${OPENSEARCH_HEAP_MB:-$MEM_OPENSEARCH}"
+    MEM_BATCH_INDEXER="${BATCH_INDEXER_HEAP_MB:-$MEM_BATCH_INDEXER}"
     MEM_TRANSFORM="${TRANSFORM_HEAP_MB:-$MEM_TRANSFORM}"
     MEM_ACTIVEMQ="${ACTIVEMQ_HEAP_MB:-$MEM_ACTIVEMQ}"
     MEM_POSTGRES_SHARED="${POSTGRES_SHARED_BUFFERS_MB:-$MEM_POSTGRES_SHARED}"
@@ -383,7 +395,7 @@ calculate_memory_allocation() {
     # Export for use in scripts
     export MEM_PROFILE
     export MEM_TOMCAT_XMS MEM_TOMCAT_XMX
-    export MEM_SOLR MEM_TRANSFORM MEM_ACTIVEMQ
+    export MEM_SOLR MEM_OPENSEARCH MEM_BATCH_INDEXER MEM_TRANSFORM MEM_ACTIVEMQ
     export MEM_POSTGRES_SHARED MEM_POSTGRES_CACHE
 }
 
@@ -391,7 +403,12 @@ calculate_memory_allocation() {
 show_memory_allocation() {
     log_info "Memory allocation (${MEM_PROFILE} profile):"
     log_info "  Tomcat/Alfresco: ${MEM_TOMCAT_XMS}MB - ${MEM_TOMCAT_XMX}MB"
-    log_info "  Solr:            ${MEM_SOLR}MB"
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        log_info "  OpenSearch:      ${MEM_OPENSEARCH}MB"
+        log_info "  Batch Indexer:   ${MEM_BATCH_INDEXER}MB"
+    else
+        log_info "  Solr:            ${MEM_SOLR}MB"
+    fi
     log_info "  Transform:       ${MEM_TRANSFORM}MB"
     log_info "  ActiveMQ:        ${MEM_ACTIVEMQ}MB"
     log_info "  PostgreSQL:      shared_buffers=${MEM_POSTGRES_SHARED}MB, effective_cache=${MEM_POSTGRES_CACHE}MB"

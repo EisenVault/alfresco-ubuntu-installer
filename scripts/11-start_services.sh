@@ -4,13 +4,12 @@
 # =============================================================================
 # Starts all Alfresco services in the correct order with health checks.
 #
-# Service startup order:
-# 1. PostgreSQL (database)
-# 2. ActiveMQ (messaging)
-# 3. Transform (document transformation)
-# 4. Tomcat (Alfresco + Share)
-# 5. Solr (search)
-# 6. Nginx (reverse proxy)
+# Service startup order (solr backend):
+# 1. PostgreSQL  2. ActiveMQ  3. Transform  4. Tomcat  5. Solr  6. Nginx
+#
+# Service startup order (opensearch backend):
+# 1. PostgreSQL  2. ActiveMQ  3. Transform  4. OpenSearch  5. Tomcat
+# 6. Batch Indexer  7. Nginx
 #
 # Usage:
 #   bash scripts/11-start_services.sh [--no-wait]
@@ -67,14 +66,22 @@ main() {
     # Track results
     declare -A SERVICE_STATUS
     
-    # Start services in order
+    # Start services in order. Search backend differs by profile:
+    #   opensearch -> OpenSearch (before repo) + batch-indexer (after repo)
+    #   solr       -> Solr (after repo)
     start_postgresql
     start_activemq
     start_transform
-    start_tomcat
-    start_solr
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        start_opensearch
+        start_tomcat
+        start_batch_indexer
+    else
+        start_tomcat
+        start_solr
+    fi
     start_nginx
-    
+
     # Display summary
     display_summary
 }
@@ -319,6 +326,67 @@ check_solr_health() {
 }
 
 # -----------------------------------------------------------------------------
+# OpenSearch (Alfresco Search Community backend)
+# -----------------------------------------------------------------------------
+start_opensearch() {
+    start_service "opensearch" "OpenSearch" "check_opensearch_health"
+}
+
+check_opensearch_health() {
+    log_info "Checking OpenSearch health..."
+
+    local attempts=0
+    local max_attempts=60
+    local health_url="http://${OPENSEARCH_HOST:-localhost}:${OPENSEARCH_PORT:-9200}/_cluster/health"
+
+    while true; do
+        # Cluster status green or yellow means the node is usable
+        if curl -sf "$health_url" 2>/dev/null | grep -qE '"status":"(green|yellow)"'; then
+            log_info "OpenSearch is healthy"
+            return 0
+        fi
+
+        if [ $attempts -ge $max_attempts ]; then
+            log_error "OpenSearch health check timed out"
+            return 1
+        fi
+
+        sleep 2
+        ((attempts++))
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Batch Indexer (feeds OpenSearch from the repository)
+# -----------------------------------------------------------------------------
+start_batch_indexer() {
+    start_service "batch-indexer" "Batch Indexer" "check_batch_indexer_health"
+}
+
+check_batch_indexer_health() {
+    log_info "Checking Batch Indexer health..."
+
+    local attempts=0
+    local max_attempts=60
+    local health_url="http://localhost:${BATCH_INDEXER_PORT:-9998}/actuator/health"
+
+    while true; do
+        if curl -sf "$health_url" 2>/dev/null | grep -q '"status":"UP"'; then
+            log_info "Batch Indexer is healthy"
+            return 0
+        fi
+
+        if [ $attempts -ge $max_attempts ]; then
+            log_warn "Batch Indexer health check timed out (it may still be starting up)"
+            return 0  # Non-fatal: indexing catches up once the repo is fully ready
+        fi
+
+        sleep 2
+        ((attempts++))
+    done
+}
+
+# -----------------------------------------------------------------------------
 # Nginx
 # -----------------------------------------------------------------------------
 start_nginx() {
@@ -359,9 +427,15 @@ display_summary() {
     echo "│                    SERVICE STATUS                           │"
     echo "├────────────────────┬────────────────────────────────────────┤"
     
-    # Define service order for display
-    local services=("postgresql" "activemq" "transform" "tomcat" "solr" "nginx")
-    local names=("PostgreSQL" "ActiveMQ" "Transform Service" "Tomcat (Alfresco)" "Solr" "Nginx")
+    # Define service order for display (search services depend on the backend)
+    local services names
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        services=("postgresql" "activemq" "transform" "opensearch" "tomcat" "batch-indexer" "nginx")
+        names=("PostgreSQL" "ActiveMQ" "Transform Service" "OpenSearch" "Tomcat (Alfresco)" "Batch Indexer" "Nginx")
+    else
+        services=("postgresql" "activemq" "transform" "tomcat" "solr" "nginx")
+        names=("PostgreSQL" "ActiveMQ" "Transform Service" "Tomcat (Alfresco)" "Solr" "Nginx")
+    fi
     
     for i in "${!services[@]}"; do
         local service="${services[$i]}"
@@ -398,7 +472,12 @@ display_summary() {
     log_info "  Alfresco Content App: http://${NGINX_SERVER_NAME:-localhost}:${NGINX_HTTP_PORT:-80}/"
     log_info "  Alfresco Repository:  http://${NGINX_SERVER_NAME:-localhost}:${NGINX_HTTP_PORT:-80}/alfresco/"
     log_info "  Alfresco Share:       http://${NGINX_SERVER_NAME:-localhost}:${NGINX_HTTP_PORT:-80}/share/"
-    log_info "  Solr Admin:           http://${SOLR_HOST:-localhost}:${SOLR_PORT:-8983}/solr/"
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        log_info "  OpenSearch:           http://${OPENSEARCH_HOST:-localhost}:${OPENSEARCH_PORT:-9200}/"
+        log_info "  Batch Indexer health: http://localhost:${BATCH_INDEXER_PORT:-9998}/actuator/health"
+    else
+        log_info "  Solr Admin:           http://${SOLR_HOST:-localhost}:${SOLR_PORT:-8983}/solr/"
+    fi
     log_info "  ActiveMQ Console:     http://${ACTIVEMQ_HOST:-localhost}:${ACTIVEMQ_WEBCONSOLE_PORT:-8161}/"
     log_info ""
     log_info "Default credentials: admin / ${ALFRESCO_ADMIN_PASSWORD}"

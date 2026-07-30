@@ -230,7 +230,9 @@ check_services_status() {
     
     local services_running=0
     
-    for service in postgresql tomcat solr; do
+    local search_service="solr"
+    [ "${SEARCH_BACKEND:-solr}" = "opensearch" ] && search_service="opensearch"
+    for service in postgresql tomcat "$search_service"; do
         if systemctl is-active --quiet "$service" 2>/dev/null; then
             log_info "$service is running"
             ((services_running++))
@@ -423,19 +425,31 @@ backup_configuration() {
         "${ALFRESCO_HOME}/tomcat/conf/server.xml"
         "${ALFRESCO_HOME}/tomcat/conf/catalina.properties"
         "${ALFRESCO_HOME}/tomcat/bin/setenv.sh"
-        "${ALFRESCO_HOME}/alfresco-search-services/solrhome/conf"
-        "${ALFRESCO_HOME}/alfresco-search-services/solr.in.sh"
         "${ALFRESCO_HOME}/activemq/conf"
         "${ALFRESCO_HOME}/transform/application.properties"
         "${ALFRESCO_HOME}/keystore"
         "/etc/nginx/sites-available/alfresco"
         "/etc/systemd/system/tomcat.service"
-        "/etc/systemd/system/solr.service"
         "/etc/systemd/system/activemq.service"
         "/etc/systemd/system/transform.service"
         "${CONFIG_DIR}/alfresco.env"
         "${CONFIG_DIR}/versions.conf"
     )
+
+    # Search-backend-specific config and service units
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        configs+=(
+            "${ALFRESCO_HOME}/opensearch/config"
+            "/etc/systemd/system/opensearch.service"
+            "/etc/systemd/system/batch-indexer.service"
+        )
+    else
+        configs+=(
+            "${ALFRESCO_HOME}/alfresco-search-services/solrhome/conf"
+            "${ALFRESCO_HOME}/alfresco-search-services/solr.in.sh"
+            "/etc/systemd/system/solr.service"
+        )
+    fi
     
     local backed_up=0
     
@@ -466,8 +480,18 @@ backup_configuration() {
 # Backup Solr Indexes
 # -----------------------------------------------------------------------------
 backup_solr_indexes() {
+    # The OpenSearch backend has no Alfresco-side index backup: the index is
+    # rebuildable by the batch-indexer, and index snapshots are an OpenSearch
+    # _snapshot devops concern outside this tool's scope.
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        log_info "Search backend is OpenSearch; skipping search index backup."
+        log_info "The index is rebuilt automatically by the batch-indexer, or use"
+        log_info "OpenSearch _snapshot APIs for index-level backups."
+        return 0
+    fi
+
     log_step "Backing up Solr indexes..."
-    
+
     local solr_home="${ALFRESCO_HOME}/alfresco-search-services"
     local solr_data="${solr_home}/solrhome"
     local solr_backup="${BACKUP_DIR}/solr"

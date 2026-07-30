@@ -368,7 +368,10 @@ check_services() {
     
     local services_running=()
     
-    for service in tomcat solr activemq transform nginx; do
+    local search_service="solr"
+    [ "${SEARCH_BACKEND:-solr}" = "opensearch" ] && search_service="batch-indexer opensearch"
+    # shellcheck disable=SC2086
+    for service in tomcat $search_service activemq transform nginx; do
         if systemctl is-active --quiet "$service" 2>/dev/null; then
             services_running+=("$service")
         fi
@@ -741,8 +744,16 @@ restore_configuration() {
 # Restore Solr Indexes
 # -----------------------------------------------------------------------------
 restore_solr_indexes() {
+    # OpenSearch backend has no Alfresco-side index backup; the batch-indexer
+    # rebuilds the index automatically once services start.
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        log_info "Search backend is OpenSearch; no search index to restore."
+        log_info "The batch-indexer will rebuild the index after services start."
+        return 0
+    fi
+
     log_step "Restoring Solr indexes..."
-    
+
     local backup_solr="${BACKUP_EXTRACTED_DIR}/solr"
     local target_solr="${ALFRESCO_HOME}/alfresco-search-services/solrhome"
     

@@ -60,6 +60,7 @@ main() {
     # Install components
     install_jdbc_driver
     install_web_applications
+    override_share_war
     install_keystore
     create_data_directory
 
@@ -110,6 +111,18 @@ verify_prerequisites() {
         ((errors++))
     else
         log_info "Found distribution: $(basename "$dist_file")"
+    fi
+
+    # When a standalone Share WAR override is pinned, it must be downloaded too
+    if [ -n "${SHARE_VERSION:-}" ]; then
+        local share_war_file="${DOWNLOAD_DIR}/share-${SHARE_VERSION}.war"
+        if [ ! -f "$share_war_file" ]; then
+            log_error "Standalone Share WAR not found: $(basename "$share_war_file")"
+            log_error "Please run 05-download_alfresco_resources.sh first"
+            ((errors++))
+        else
+            log_info "Found standalone Share WAR: $(basename "$share_war_file")"
+        fi
     fi
 
     if [ $errors -gt 0 ]; then
@@ -270,6 +283,46 @@ install_web_applications() {
 }
 
 # -----------------------------------------------------------------------------
+# Override Share WAR
+# -----------------------------------------------------------------------------
+# When SHARE_VERSION is set (e.g. the 26.2 profile), replace the share.war
+# bundled in the ACS distribution with the standalone Share WAR downloaded by
+# 05-download_alfresco_resources.sh. This ships the secure 26.2.1 Share line in
+# place of the insecure 26.2.0 build bundled in the distribution. Must run
+# before apply_amps and extract_war_files so both operate on the secure WAR.
+override_share_war() {
+    if [ -z "${SHARE_VERSION:-}" ]; then
+        log_info "No SHARE_VERSION override set, using bundled share.war"
+        return 0
+    fi
+
+    log_step "Overriding share.war with standalone Share ${SHARE_VERSION}..."
+
+    local tomcat_home="${ALFRESCO_HOME}/tomcat"
+    local share_war_dest="$tomcat_home/webapps/share.war"
+    local share_war_src="${DOWNLOAD_DIR}/share-${SHARE_VERSION}.war"
+
+    if [ ! -f "$share_war_src" ]; then
+        log_error "Standalone Share WAR not found: $share_war_src"
+        log_error "Please run 05-download_alfresco_resources.sh first"
+        exit 1
+    fi
+
+    # Back up the bundled WAR before replacing it
+    if [ -f "$share_war_dest" ]; then
+        backup_file "$share_war_dest"
+    fi
+
+    sudo cp "$share_war_src" "$share_war_dest"
+
+    # Match ownership/permissions applied to WARs so apply_amps can write to it
+    sudo chown "${ALFRESCO_USER}:${ALFRESCO_GROUP}" "$share_war_dest"
+    sudo chmod 664 "$share_war_dest"
+
+    log_info "Installed standalone Share WAR: share-${SHARE_VERSION}.war"
+}
+
+# -----------------------------------------------------------------------------
 # Install Keystore
 # -----------------------------------------------------------------------------
 install_keystore() {
@@ -330,6 +383,31 @@ create_alfresco_global_properties() {
         backup_file "$props_file"
     fi
 
+    # Build the search subsystem configuration for the active backend.
+    # opensearch -> repository indexes through its internal 'elasticsearch'
+    #               subsystem (fed by the batch-indexer). The legacy solr.*
+    #               properties remain required in 26.2 for the X509-protected
+    #               text-extraction endpoint the batch-indexer calls.
+    # solr       -> Alfresco Search Services (Solr 6).
+    local search_config
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        search_config="# Search Configuration (OpenSearch / Alfresco Search Community)
+index.subsystem.name=elasticsearch
+elasticsearch.host=${OPENSEARCH_HOST}
+elasticsearch.port=${OPENSEARCH_PORT}
+elasticsearch.createIndexIfNotExists=true
+# Shared secret for the batch-indexer text-extraction endpoint (legacy solr.* names)
+solr.secureComms=secret
+solr.sharedSecret=${SOLR_SHARED_SECRET}"
+    else
+        search_config="# Search Configuration (Alfresco Search Services / Solr)
+index.subsystem.name=solr6
+solr.secureComms=secret
+solr.sharedSecret=${SOLR_SHARED_SECRET}
+solr.host=${SOLR_HOST}
+solr.port=${SOLR_PORT}"
+    fi
+
     sudo tee "$props_file" > /dev/null << EOF
 # =============================================================================
 # Alfresco Global Properties
@@ -360,13 +438,9 @@ db.pool.max=100
 db.pool.validate.query=SELECT 1
 
 # -----------------------------------------------------------------------------
-# Solr Configuration
+# Search Configuration
 # -----------------------------------------------------------------------------
-index.subsystem.name=solr6
-solr.secureComms=secret
-solr.sharedSecret=${SOLR_SHARED_SECRET}
-solr.host=${SOLR_HOST}
-solr.port=${SOLR_PORT}
+${search_config}
 
 # -----------------------------------------------------------------------------
 # Transform Service Configuration
