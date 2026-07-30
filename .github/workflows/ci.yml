@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [7.4, 23.x, 25.x, 26.1]
+        profile: [7.4, 23.x, 25.x, 26.1, 26.2]
     
     steps:
       - name: Checkout repository
@@ -105,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [23.x, 26.1]
+        profile: [23.x, 26.1, 26.2]
 
     # Allow job to continue to collect all errors
     continue-on-error: false
@@ -166,10 +166,18 @@ jobs:
           echo "=== Installing Alfresco ==="
           bash scripts/06-install_alfresco.sh
 
-      - name: Install Solr
+      - name: Install Search Backend
         run: |
-          echo "=== Installing Solr ==="
-          bash scripts/07-install_solr.sh
+          echo "=== Installing Search Backend ==="
+          source config/versions.conf
+          if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+            echo "Search backend: OpenSearch + Batch Indexer"
+            bash scripts/07-install_opensearch.sh
+            bash scripts/07b-install_batch_indexer.sh
+          else
+            echo "Search backend: Solr"
+            bash scripts/07-install_solr.sh
+          fi
 
       - name: Install Transform Service
         run: |
@@ -194,7 +202,13 @@ jobs:
           ls -la /etc/systemd/system/tomcat.service
           ls -la /etc/systemd/system/activemq.service
           ls -la /etc/systemd/system/transform.service
-          ls -la /etc/systemd/system/solr.service
+          source config/versions.conf
+          if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+            ls -la /etc/systemd/system/opensearch.service
+            ls -la /etc/systemd/system/batch-indexer.service
+          else
+            ls -la /etc/systemd/system/solr.service
+          fi
           echo "All service files exist!"
 
       - name: Verify services are enabled
@@ -204,7 +218,13 @@ jobs:
           systemctl is-enabled activemq || echo "activemq not enabled"
           systemctl is-enabled transform || echo "transform not enabled"
           systemctl is-enabled tomcat || echo "tomcat not enabled"
-          systemctl is-enabled solr || echo "solr not enabled"
+          source config/versions.conf
+          if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+            systemctl is-enabled opensearch || echo "opensearch not enabled"
+            systemctl is-enabled batch-indexer || echo "batch-indexer not enabled"
+          else
+            systemctl is-enabled solr || echo "solr not enabled"
+          fi
           systemctl is-enabled nginx || echo "nginx not enabled"
 
       - name: Start services
@@ -219,7 +239,13 @@ jobs:
           systemctl status activemq --no-pager || true
           systemctl status transform --no-pager || true
           systemctl status tomcat --no-pager || true
-          systemctl status solr --no-pager || true
+          source config/versions.conf
+          if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+            systemctl status opensearch --no-pager || true
+            systemctl status batch-indexer --no-pager || true
+          else
+            systemctl status solr --no-pager || true
+          fi
           systemctl status nginx --no-pager || true
 
       - name: Wait for Alfresco to start

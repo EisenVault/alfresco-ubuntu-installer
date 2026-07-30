@@ -4,13 +4,14 @@
 # =============================================================================
 # Stops all Alfresco services in the correct order (reverse of startup).
 #
-# Service shutdown order:
-# 1. Nginx (reverse proxy) - stop accepting new connections
-# 2. Solr (search) - stop indexing
-# 3. Tomcat (Alfresco + Share) - main application
-# 4. Transform (document transformation)
-# 5. ActiveMQ (messaging)
-# 6. PostgreSQL (database) - stop last to ensure data integrity
+# Service shutdown order (solr backend):
+# 1. Nginx  2. Solr  3. Tomcat  4. Transform  5. ActiveMQ  6. PostgreSQL
+#
+# Service shutdown order (opensearch backend):
+# 1. Nginx  2. Batch Indexer  3. Tomcat  4. OpenSearch  5. Transform
+# 6. ActiveMQ  7. PostgreSQL
+#
+# PostgreSQL stops last to ensure data integrity.
 #
 # Usage:
 #   bash scripts/12-stop_services.sh [--force] [--no-wait]
@@ -75,14 +76,20 @@ main() {
     # Track results
     declare -A SERVICE_STATUS
     
-    # Stop services in reverse order
+    # Stop services in reverse order of startup (backend-specific search services)
     stop_nginx
-    stop_solr
-    stop_tomcat
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        stop_batch_indexer
+        stop_tomcat
+        stop_opensearch
+    else
+        stop_solr
+        stop_tomcat
+    fi
     stop_transform
     stop_activemq
     stop_postgresql
-    
+
     # Display summary
     display_summary
 }
@@ -197,6 +204,21 @@ pre_stop_solr() {
 }
 
 # -----------------------------------------------------------------------------
+# Batch Indexer (feeds OpenSearch)
+# -----------------------------------------------------------------------------
+stop_batch_indexer() {
+    stop_service "batch-indexer" "Batch Indexer"
+}
+
+# -----------------------------------------------------------------------------
+# OpenSearch (Alfresco Search Community backend)
+# -----------------------------------------------------------------------------
+stop_opensearch() {
+    # OpenSearch flushes its translog on shutdown; no pre-stop commit needed.
+    stop_service "opensearch" "OpenSearch"
+}
+
+# -----------------------------------------------------------------------------
 # Tomcat (Alfresco + Share)
 # -----------------------------------------------------------------------------
 stop_tomcat() {
@@ -270,9 +292,15 @@ display_summary() {
     echo "│                    SERVICE STATUS                           │"
     echo "├────────────────────┬────────────────────────────────────────┤"
     
-    # Define service order for display (reverse of startup)
-    local services=("nginx" "solr" "tomcat" "transform" "activemq" "postgresql")
-    local names=("Nginx" "Solr" "Tomcat (Alfresco)" "Transform Service" "ActiveMQ" "PostgreSQL")
+    # Define service order for display (reverse of startup, backend-specific)
+    local services names
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        services=("nginx" "batch-indexer" "tomcat" "opensearch" "transform" "activemq" "postgresql")
+        names=("Nginx" "Batch Indexer" "Tomcat (Alfresco)" "OpenSearch" "Transform Service" "ActiveMQ" "PostgreSQL")
+    else
+        services=("nginx" "solr" "tomcat" "transform" "activemq" "postgresql")
+        names=("Nginx" "Solr" "Tomcat (Alfresco)" "Transform Service" "ActiveMQ" "PostgreSQL")
+    fi
     
     for i in "${!services[@]}"; do
         local service="${services[$i]}"

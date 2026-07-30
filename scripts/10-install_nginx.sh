@@ -352,14 +352,22 @@ configure_systemd() {
     local override_file="$override_dir/alfresco.conf"
     
     sudo mkdir -p "$override_dir"
-    
+
+    # Order Nginx after the active search backend's services (soft dependency).
+    local search_units
+    if [ "${SEARCH_BACKEND:-solr}" = "opensearch" ]; then
+        search_units="opensearch.service batch-indexer.service"
+    else
+        search_units="solr.service"
+    fi
+
     cat << EOF | sudo tee "$override_file" > /dev/null
 # Alfresco-specific Nginx overrides
 [Unit]
-# Start after Solr to ensure all backend services are ready
-After=network.target solr.service
-# Don't hard-require Solr (Nginx can start without it)
-Wants=solr.service
+# Start after the search backend so all backend services are ready
+After=network.target ${search_units}
+# Soft dependency only (Nginx can start without the search backend)
+Wants=${search_units}
 
 [Service]
 # Increase file descriptor limit

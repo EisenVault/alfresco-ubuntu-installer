@@ -115,7 +115,9 @@ Ensure these ports are available:
 | 8080 | Tomcat | Alfresco/Share (internal) |
 | 8090 | Transform | Document transformation |
 | 8161 | ActiveMQ | Web console |
-| 8983 | Solr | Search service |
+| 8983 | Solr | Search service (solr backend, <= 26.1) |
+| 9200 | OpenSearch | Search service (opensearch backend, 26.2+) |
+| 9998 | Batch Indexer | Actuator/health (opensearch backend, 26.2+) |
 | 61616 | ActiveMQ | OpenWire protocol |
 
 ## Quick Start
@@ -149,7 +151,14 @@ bash scripts/03-install_tomcat.sh
 bash scripts/04-install_activemq.sh
 bash scripts/05-download_alfresco_resources.sh
 bash scripts/06-install_alfresco.sh
+
+# Search backend (choose based on your profile):
+#   Solr backend (profiles 7.4 / 23.x / 25.x / 26.1):
 bash scripts/07-install_solr.sh
+#   OpenSearch backend (profile 26.2):
+# bash scripts/07-install_opensearch.sh
+# bash scripts/07b-install_batch_indexer.sh
+
 bash scripts/08-install_transform.sh
 bash scripts/09-build_aca.sh
 bash scripts/10-install_nginx.sh
@@ -187,7 +196,8 @@ alfresco-ubuntu-installer/
 │       ├── versions-7.4.conf    # Alfresco 7.4 LTS
 │       ├── versions-23.x.conf   # Alfresco 23.x (default)
 │       ├── versions-25.x.conf   # Alfresco 25.x
-│       └── versions-26.1.conf   # Alfresco 26.1
+│       ├── versions-26.1.conf   # Alfresco 26.1
+│       └── versions-26.2.conf   # Alfresco 26.2 (OpenSearch)
 ├── scripts/
 │   ├── common.sh                # Shared functions
 │   ├── 00-generate-config.sh    # Generate secure configuration
@@ -197,7 +207,9 @@ alfresco-ubuntu-installer/
 │   ├── 04-install_activemq.sh   # Apache ActiveMQ
 │   ├── 05-download_alfresco_resources.sh  # Download artifacts
 │   ├── 06-install_alfresco.sh   # Alfresco + Share
-│   ├── 07-install_solr.sh       # Alfresco Search Services
+│   ├── 07-install_solr.sh       # Alfresco Search Services (solr backend)
+│   ├── 07-install_opensearch.sh # OpenSearch (opensearch backend, 26.2+)
+│   ├── 07b-install_batch_indexer.sh # Batch indexer (opensearch backend, 26.2+)
 │   ├── 08-install_transform.sh  # Transform Service
 │   ├── 09-build_aca.sh          # Alfresco Content App
 │   ├── 10-install_nginx.sh      # Nginx reverse proxy
@@ -219,12 +231,24 @@ alfresco-ubuntu-installer/
 
 The installer supports multiple Alfresco versions through pre-configured profiles:
 
-| Profile | Alfresco | Java | Tomcat | PostgreSQL | Status |
-|---------|----------|------|--------|------------|--------|
-| **7.4** | 7.4.2 | 17 | 9.0.x | 14 | LTS (legacy) |
-| **23.x** | 23.4.1 | 17 | 10.1.x | 16 | Maintained |
-| **25.x** | 25.2.0 | 17/21 | 10.1.x | 16 | Stable |
-| **26.1** | 26.1.0 | 17 | 10.1.x | 16 | Current (non-default) |
+| Profile | Alfresco | Java | Tomcat | PostgreSQL | Search | Status |
+|---------|----------|------|--------|------------|--------|--------|
+| **7.4** | 7.4.2 | 17 | 9.0.x | 14 | Solr | LTS (legacy) |
+| **23.x** | 23.4.1 | 17 | 10.1.x | 16 | Solr | Maintained |
+| **25.x** | 25.2.0 | 17/21 | 10.1.x | 16 | Solr | Stable |
+| **26.1** | 26.1.0 | 21 | 10.1.x | 16 | Solr | Current (non-default) |
+| **26.2** | 26.2.0 [1] | 21 | 10.1.x | 16 | OpenSearch | Current (non-default) |
+
+[1] The 26.2 profile installs Alfresco Content Services 26.2.0 but overrides the
+bundled Share application with the standalone secure Share WAR `26.2.1.2`, because
+Share `26.2.0` is insecure.
+
+Starting with **26.2**, Alfresco replaces Solr / Alfresco Search Services with
+**Alfresco Search Community**: an OpenSearch backend indexed by the standalone
+Alfresco Elasticsearch Batch Indexing application. The active search backend is
+selected per profile via the `SEARCH_BACKEND` variable (`solr` or `opensearch`);
+profiles 7.4 through 26.1 use Solr, and 26.2 uses OpenSearch. See
+[Search Backends](#search-backends) below.
 
 Select a profile during configuration:
 
@@ -243,9 +267,44 @@ bash scripts/00-generate-config.sh --profile 25.x
 
 # Use Alfresco 26.1
 bash scripts/00-generate-config.sh --profile 26.1
+
+# Use Alfresco 26.2 (OpenSearch search backend)
+bash scripts/00-generate-config.sh --profile 26.2
 ```
 
-The `26.1` profile keeps `23.x` as the default configuration and updates the frontend stack to ACA `7.3.0` with Node.js `24`.
+The default profile remains `23.x`. The `26.1` profile updates the frontend stack
+to ACA `7.3.0` with Node.js `24` and Java `21`. The `26.2` profile builds on that
+and switches the search backend to OpenSearch (see [Search Backends](#search-backends)).
+It also ships a standalone secure Share WAR (`26.2.1.2`) that overrides the
+insecure Share `26.2.0` bundled in the ACS distribution; scripts `05` and `06`
+download and apply this WAR automatically when the `SHARE_VERSION` variable is set.
+
+### Search Backends
+
+The installer supports two search backends, selected by the `SEARCH_BACKEND`
+variable in the active profile (`config/versions.conf`):
+
+| Backend | Profiles | Components | Install scripts |
+|---------|----------|------------|-----------------|
+| `solr` | 7.4, 23.x, 25.x, 26.1 | Alfresco Search Services (Solr 6) | `07-install_solr.sh` |
+| `opensearch` | 26.2 | OpenSearch + Alfresco Elasticsearch Batch Indexing | `07-install_opensearch.sh`, `07b-install_batch_indexer.sh` |
+
+With the `opensearch` backend:
+
+- The repository indexes through its internal `elasticsearch` subsystem
+  (`index.subsystem.name=elasticsearch`), pointed at OpenSearch on port `9200`.
+- A separate service, the **batch-indexer** (a Spring Boot application), polls the
+  repository database and pushes documents into OpenSearch. There is no ActiveMQ
+  involvement for search, and no Solr cores.
+- The `SOLR_SHARED_SECRET` value is still used as the shared secret between the
+  repository and the batch-indexer text-extraction endpoint (the legacy `solr.*`
+  property names remain required in 26.2).
+- By default the OpenSearch security plugin is **disabled** and OpenSearch binds to
+  `localhost`, matching the official Alfresco reference deployment. For production,
+  enable TLS and authentication (see
+  [Enabling OpenSearch security](#enabling-opensearch-security-tls-13)).
+- There is no data migration between Solr and OpenSearch; switching backends means a
+  full reindex, which the batch-indexer performs automatically.
 
 ### Version Configuration (`config/versions.conf`)
 
@@ -675,7 +734,7 @@ If preview fails, check Transform Service logs:
 journalctl -u transform.service -o cat --no-pager | tail -50
 ```
 
-### 4. Search Service (Solr)
+### 4. Search Service
 
 Create content and verify search returns results.
 
@@ -691,7 +750,7 @@ Success indicators
 - Search suggestions appear as you type
 - Advanced search filters work correctly
 
-Check indexing status via Solr Admin
+**Solr backend** (profiles 7.4 / 23.x / 25.x / 26.1) - check indexing status via Solr Admin:
 
 1. Open http://localhost:8983/solr/ (requires shared secret header and an extension like [FlexHeaders](https://addons.mozilla.org/en-US/firefox/addon/flexheaders-alter-http-headers) for Firefox)
 2. Or use curl:
@@ -701,7 +760,23 @@ Check indexing status via Solr Admin
         "http://localhost:8983/solr/alfresco/admin/ping"
    ```
 
-Expected response: `{"status":"OK"}`
+   Expected response: `{"status":"OK"}`
+
+**OpenSearch backend** (profile 26.2) - check the batch-indexer and the index:
+
+```bash
+# Batch-indexer health (expect "status":"UP")
+curl http://localhost:9998/actuator/health
+
+# OpenSearch cluster health (expect "status":"green" or "yellow")
+curl http://localhost:9200/_cluster/health
+
+# List indices - an 'alfresco' index and 'alfresco-reindex-state' should appear
+curl "http://localhost:9200/_cat/indices?v"
+
+# Follow indexing progress
+journalctl -u batch-indexer.service -o cat --no-pager | tail -50
+```
 
 ### 5. ActiveMQ Message Broker
 
@@ -1294,9 +1369,10 @@ For detailed instructions, examples, and troubleshooting, see **[ADDONS.md](ADDO
 1. **Admin password is auto-generated** - Check `config/alfresco.env` for the generated password after running `00-generate-config.sh`. Save it securely!
 2. **Password encoding** - The installer configures `bcrypt10` encoding for secure password storage. MD4 passwords are automatically upgraded on first login.
 3. **Configure HTTPS** in Nginx for production deployments (see below)
-4. **Restrict network access** to internal ports (8080, 8983, 8161, etc.)
-5. **Keep `config/alfresco.env` secure** - it contains all passwords including admin, database, and Solr secrets
+4. **Restrict network access** to internal ports (8080, 8983, 9200, 8161, etc.)
+5. **Keep `config/alfresco.env` secure** - it contains all passwords including admin, database, and search secrets
 6. **Regular backups** - Use the provided backup scripts
+7. **OpenSearch security** (26.2 / opensearch backend) - the security plugin is disabled and OpenSearch binds to localhost by default. Enable TLS and authentication for production (see [Enabling OpenSearch security](#enabling-opensearch-security-tls-13)).
 
 ### Configuring HTTPS with TLS 1.3
 
@@ -1532,3 +1608,54 @@ curl -vI https://your-server-name/
 # Online test (for public servers)
 # Visit: https://www.ssllabs.com/ssltest/
 ```
+
+### Enabling OpenSearch security (TLS 1.3)
+
+This section applies only to the `opensearch` backend (profile 26.2+). By default
+the installer disables the OpenSearch security plugin and binds OpenSearch to
+`localhost`, which matches the official Alfresco reference deployment and is only
+suitable for local/development use. For production you should enable the security
+plugin with TLS and authentication.
+
+At a high level:
+
+1. **Generate certificates.** Create a self-signed CA and a node certificate (and,
+   for administrative access, an admin certificate). Provide a JCEKS truststore for
+   the repository search subsystem and a JKS truststore for the batch-indexer Java
+   client, both trusting your CA.
+
+2. **Configure OpenSearch.** Enable the security plugin (remove
+   `plugins.security.disabled: true`), mount your node certificate and CA, define an
+   `admin` internal user, and restrict the HTTP protocol to TLS 1.3:
+
+   ```yaml
+   plugins.security.ssl.http.enabled: true
+   plugins.security.ssl.http.enabled_protocols: [TLSv1.3]
+   plugins.security.ssl.http.pemcert_filepath: opensearch.pem
+   plugins.security.ssl.http.pemkey_filepath: opensearch-key.pem
+   plugins.security.ssl.http.pemtrustedcas_filepath: root-ca.pem
+   ```
+
+3. **Point the repository at HTTPS.** In `alfresco-global.properties` set
+   `elasticsearch.secureComms=https`, add `elasticsearch.user` /
+   `elasticsearch.password`, and configure the JCEKS truststore
+   (`encryption.ssl.truststore.*`).
+
+4. **Point the batch-indexer at HTTPS.** Set `SPRING_ELASTICSEARCH_REST_URIS` to an
+   `https://user:password@host:9200` URI and pass a Java truststore via
+   `JAVA_OPTS` (`-Djavax.net.ssl.trustStore=...`,
+   `-Djavax.net.ssl.trustStorePassword=...`) in
+   `/etc/systemd/system/batch-indexer.service`.
+
+Verify TLS 1.3 is enforced:
+
+```bash
+# Should succeed
+curl -sk -u admin:'yourpassword' --tlsv1.3 https://localhost:9200/_cluster/health
+
+# Should fail (protocol version alert): confirms TLS 1.2 is rejected
+curl -sk -u admin:'yourpassword' --tlsv1.2 --tls-max 1.2 https://localhost:9200/_cluster/health
+```
+
+> **Note:** The AWS-managed OpenSearch option (SigV4/IAM auth) is also supported by
+> the batch-indexer client as an alternative to username/password over TLS.

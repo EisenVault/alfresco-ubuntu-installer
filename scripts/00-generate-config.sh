@@ -10,7 +10,7 @@
 #
 # Options:
 #   --force              Overwrite existing configuration file
-#   --profile PROFILE    Select version profile: 7.4, 23.x, 25.x, 26.1 (default: 23.x)
+#   --profile PROFILE    Select version profile: 7.4, 23.x, 25.x, 26.1, 26.2 (default: 23.x)
 #   --list-profiles      List available version profiles
 #
 # Examples:
@@ -165,7 +165,7 @@ main() {
                 echo ""
                 echo "Options:"
                 echo "  --force              Overwrite existing configuration"
-                echo "  --profile PROFILE    Select version profile: 7.4, 23.x, 25.x, 26.1"
+                echo "  --profile PROFILE    Select version profile: 7.4, 23.x, 25.x, 26.1, 26.2"
                 echo "  --list-profiles      List available version profiles"
                 echo "  --env-only           Only generate alfresco.env (skip versions.conf)"
                 echo "  -h, --help           Show this help message"
@@ -260,11 +260,31 @@ export ALFRESCO_ADMIN_PASSWORD="${admin_password}"
 export ALFRESCO_ADMIN_PASSWORD_HASH="${admin_password_hash}"
 
 # -----------------------------------------------------------------------------
-# Solr Configuration
+# Search Backend Configuration
+# -----------------------------------------------------------------------------
+# The active search backend is selected by the version profile (versions.conf),
+# which is sourced before this file. The fallback below only applies if the
+# profile does not set it, so the profile value always wins:
+#   solr       -> Alfresco Search Services (Solr)
+#   opensearch -> OpenSearch + batch-indexer (Alfresco 26.2+)
+export SEARCH_BACKEND="\${SEARCH_BACKEND:-solr}"
+
+# -----------------------------------------------------------------------------
+# Solr Configuration (SEARCH_BACKEND=solr)
 # -----------------------------------------------------------------------------
 export SOLR_HOST="localhost"
 export SOLR_PORT="8983"
+# Also reused by the opensearch backend as the repository/batch-indexer
+# shared secret for the text-extraction endpoint.
 export SOLR_SHARED_SECRET="${solr_secret}"
+
+# -----------------------------------------------------------------------------
+# OpenSearch / Batch Indexer Configuration (SEARCH_BACKEND=opensearch)
+# -----------------------------------------------------------------------------
+export OPENSEARCH_HOST="localhost"
+export OPENSEARCH_PORT="9200"
+# Batch-indexer actuator port (Spring Boot default 8080 collides with Tomcat).
+export BATCH_INDEXER_PORT="9998"
 
 # -----------------------------------------------------------------------------
 # Keystore Configuration - Fixed (using default / previous keystore)
@@ -327,7 +347,9 @@ export SHARE_PORT="8080"
 # Uncomment and modify these lines to override auto-detection (values in MB):
 # export TOMCAT_XMS_MB="4096"        # Tomcat initial heap
 # export TOMCAT_XMX_MB="6144"        # Tomcat maximum heap
-# export SOLR_HEAP_MB="2048"         # Solr heap
+# export SOLR_HEAP_MB="2048"         # Solr heap (SEARCH_BACKEND=solr)
+# export OPENSEARCH_HEAP_MB="2048"   # OpenSearch heap (SEARCH_BACKEND=opensearch)
+# export BATCH_INDEXER_HEAP_MB="768" # Batch-indexer heap (SEARCH_BACKEND=opensearch)
 # export TRANSFORM_HEAP_MB="1024"    # Transform service heap
 # export ACTIVEMQ_HEAP_MB="512"      # ActiveMQ heap
 # export POSTGRES_SHARED_BUFFERS_MB="1024"   # PostgreSQL shared_buffers
