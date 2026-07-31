@@ -120,9 +120,11 @@ extract_opensearch() {
     log_info "Extracting $(basename "$os_file")..."
     tar -xzf "$os_file" -C "$temp_dir"
 
-    # The tarball extracts to a versioned directory (opensearch-<version>)
+    # The tarball extracts to a versioned directory (opensearch-<version>).
+    # Use -mindepth 1 so find does not match the temp dir itself, whose name
+    # ("opensearch-install") also matches the opensearch-* glob.
     local extracted_dir
-    extracted_dir=$(find "$temp_dir" -maxdepth 1 -type d -name "opensearch-*" | head -1)
+    extracted_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d -name "opensearch-*" | head -1)
 
     if [ -n "$extracted_dir" ]; then
         mv "$extracted_dir" "$os_home"
