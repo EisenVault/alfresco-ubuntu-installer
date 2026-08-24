@@ -244,7 +244,9 @@ install_dependencies() {
         lock_hash=$(md5sum package-lock.json 2>/dev/null | cut -d' ' -f1)
         cached_hash=$(cat node_modules/.package-lock-hash 2>/dev/null || echo "none")
         
-        if [ "$lock_hash" = "$cached_hash" ]; then
+        # A previous legacy-peer-deps install may have populated the cache while
+        # omitting ngx-markdown's required marked peer dependency.
+        if [ "$lock_hash" = "$cached_hash" ] && [ -f "node_modules/marked/lib/marked.d.ts" ]; then
             log_info "Dependencies already installed (cache hit)"
             return 0
         fi
@@ -252,11 +254,19 @@ install_dependencies() {
     
     log_info "Installing dependencies (this may take several minutes)..."
     
-    # Use npm ci for faster, more reliable installs when package-lock.json exists
+    # Use npm's normal peer-dependency resolution. ACA 7.3 obtains `marked`
+    # through ngx-markdown's peer dependency; --legacy-peer-deps suppresses
+    # that installation and makes the TypeScript build fail.
     if [ -f "package-lock.json" ]; then
-        npm ci --legacy-peer-deps
+        npm ci
     else
-        npm install --legacy-peer-deps
+        npm install
+    fi
+
+    if [ ! -f "node_modules/marked/lib/marked.d.ts" ]; then
+        log_error "Required marked TypeScript declarations were not installed"
+        log_error "Expected: node_modules/marked/lib/marked.d.ts"
+        exit 1
     fi
     
     # Cache the package-lock hash
