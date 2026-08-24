@@ -82,16 +82,20 @@ install_java() {
     
     local java_package="openjdk-${JAVA_VERSION}-jdk"
     local java_bin="${JAVA_HOME_PATH}/bin/java"
+    local javac_bin="${JAVA_HOME_PATH}/bin/javac"
     
-    # Check if the specific JDK version is already installed at expected path
-    if [ -f "$java_bin" ]; then
+    # A JRE exposes java but not javac. Require both so a previously installed
+    # runtime is not mistaken for the full JDK required by this installer.
+    if [ -x "$java_bin" ] && [ -x "$javac_bin" ]; then
         local installed_version
         installed_version=$("$java_bin" -version 2>&1 | head -1 | grep -oP '\d+' | head -1)
         
         if [ "$installed_version" = "$JAVA_VERSION" ]; then
-            log_info "Java ${JAVA_VERSION} is already installed at ${JAVA_HOME_PATH}"
+            log_info "Java JDK ${JAVA_VERSION} is already installed at ${JAVA_HOME_PATH}"
             return 0
         fi
+    elif [ -x "$java_bin" ]; then
+        log_info "Java runtime found, but javac is missing; installing the full JDK"
     fi
     
     # Update package list
@@ -103,8 +107,9 @@ install_java() {
     sudo apt-get install -y "$java_package"
     
     # Verify installation
-    if [ ! -f "$java_bin" ]; then
-        log_error "Java installation failed - binary not found at $java_bin"
+    if [ ! -x "$java_bin" ] || [ ! -x "$javac_bin" ]; then
+        log_error "Java JDK installation failed - java or javac is missing"
+        log_error "Expected: $java_bin and $javac_bin"
         log_error "Checking available Java installations..."
         ls -la /usr/lib/jvm/ || true
         exit 1
