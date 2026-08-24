@@ -67,9 +67,59 @@ generate_md4_hash() {
         return 0
     else
         log_error "Failed to generate MD4 hash. OpenSSL legacy provider may not be available."
-        log_error "Using default admin password hash (admin/admin)"
-        echo "209c6174da490caeb422f3fa5a7ae634"
+        log_error "Cannot safely generate a configuration with the password you supplied."
+        return 1
     fi
+}
+
+# -----------------------------------------------------------------------------
+# Interactive Installation Settings
+# -----------------------------------------------------------------------------
+prompt_installation_home() {
+    local default_home="/opt/eisenvault_installations/eisenvault-alfresco-26_2"
+    local selected_home
+
+    while true; do
+        read -r -p "Alfresco installation home [${default_home}]: " selected_home
+        selected_home="${selected_home:-$default_home}"
+
+        if [[ "$selected_home" != /* ]]; then
+            log_error "The installation home must be an absolute path."
+            continue
+        fi
+        if [ -e "$selected_home" ] && [ ! -d "$selected_home" ]; then
+            log_error "Path exists but is not a directory: $selected_home"
+            continue
+        fi
+
+        ALFRESCO_HOME_SELECTED="$selected_home"
+        if [ -d "$selected_home" ]; then
+            log_info "Using existing installation directory: $selected_home"
+        else
+            log_info "Installation directory will be created during installation: $selected_home"
+        fi
+        return
+    done
+}
+
+prompt_admin_password() {
+    local confirmation
+
+    while true; do
+        read -r -s -p "Alfresco admin password: " ALFRESCO_ADMIN_PASSWORD_SELECTED
+        printf '\n'
+        if [ -z "$ALFRESCO_ADMIN_PASSWORD_SELECTED" ]; then
+            log_error "The admin password cannot be empty."
+            continue
+        fi
+
+        read -r -s -p "Confirm Alfresco admin password: " confirmation
+        printf '\n'
+        if [ "$ALFRESCO_ADMIN_PASSWORD_SELECTED" = "$confirmation" ]; then
+            return
+        fi
+        log_error "Passwords do not match. Please try again."
+    done
 }
 
 # -----------------------------------------------------------------------------
@@ -199,9 +249,10 @@ main() {
         echo ""
     fi
     
-    log_info "Generating secure credentials..."
+    log_info "Generating secure service credentials..."
     
-    # Generate random passwords
+    # Generate random service credentials. The Alfresco administrator password
+    # is supplied interactively below and is never displayed.
     local db_password
     local solr_secret
     local activemq_password
@@ -211,18 +262,27 @@ main() {
     db_password=$(generate_password 20)
     solr_secret=$(generate_hex_secret 32)
     activemq_password=$(generate_password 16)
-    admin_password=$(generate_password 12)
-    admin_password_hash=$(generate_md4_hash "$admin_password")
     
     # Detect current user and group
     local current_user
     local current_group
-    local current_home
     current_user="$(whoami)"
     current_group="$(id -gn)"
-    current_home="$(eval echo ~"$current_user")"
-    
-    log_info "Detected user: $current_user (group: $current_group, home: $current_home)"
+
+    log_info "Detected user: $current_user (group: $current_group)"
+    prompt_installation_home
+    prompt_admin_password
+    admin_password="$ALFRESCO_ADMIN_PASSWORD_SELECTED"
+    if ! admin_password_hash=$(generate_md4_hash "$admin_password"); then
+        exit 1
+    fi
+
+    # Quote user-provided values so special characters remain literal when this
+    # file is sourced by the installer scripts.
+    local alfresco_home_escaped
+    local admin_password_escaped
+    printf -v alfresco_home_escaped '%q' "$ALFRESCO_HOME_SELECTED"
+    printf -v admin_password_escaped '%q' "$admin_password"
     
     # Create configuration file
     cat > "$CONFIG_FILE" << EOF
@@ -241,7 +301,7 @@ main() {
 # -----------------------------------------------------------------------------
 export ALFRESCO_USER="${current_user}"
 export ALFRESCO_GROUP="${current_group}"
-export ALFRESCO_HOME="${current_home}"
+export ALFRESCO_HOME=${alfresco_home_escaped}
 
 # -----------------------------------------------------------------------------
 # Database Configuration (PostgreSQL)
@@ -258,7 +318,7 @@ export ALFRESCO_DB_PASSWORD="${db_password}"
 # Admin password is set during initial repository bootstrap.
 # Once the repository is initialized, changing this will have no effect.
 # To change password after initialization, use the Alfresco UI or API.
-export ALFRESCO_ADMIN_PASSWORD="${admin_password}"
+export ALFRESCO_ADMIN_PASSWORD=${admin_password_escaped}
 export ALFRESCO_ADMIN_PASSWORD_HASH="${admin_password_hash}"
 
 # -----------------------------------------------------------------------------
@@ -365,8 +425,8 @@ EOF
     log_info ""
     log_warn "IMPORTANT: Review and customize the configuration before installation:"
     log_info "  - Installation user: ${current_user}"
-    log_info "  - Installation home: ${current_home}"
-    log_info "  - Admin password: (auto-generated, see config file)"
+    log_info "  - Installation home: ${ALFRESCO_HOME_SELECTED}"
+    log_info "  - Admin password: (the password you entered)"
     log_info "  - Database password: (auto-generated)"
     log_info "  - Solr secret: (auto-generated)"
     log_info "  - Memory settings: TOMCAT_XMS/TOMCAT_XMX"
