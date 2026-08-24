@@ -11,12 +11,12 @@
 # - Run 00-generate-config.sh first (profile with SEARCH_BACKEND=opensearch)
 # - Run 02-install_java.sh to install Java
 # - Run 05-download_alfresco_resources.sh to download the distribution ZIP
-# - Run 06-install_alfresco.sh and 07-install_opensearch.sh
+# - Run 06-install_alfresco.sh and 07-DO-NOT-USE-install_opensearch.sh
 # - Ubuntu 22.04, 24.04 or 26.04
 # - sudo privileges
 #
 # Usage:
-#   bash scripts/07b-install_batch_indexer.sh
+#   bash scripts/07b-DO-NOT-USE-install_batch_indexer.sh
 # =============================================================================
 
 # Load common functions and configuration

@@ -183,6 +183,19 @@ ensure_directory() {
     fi
 }
 
+# Ensure the configured application home is usable by the account that runs the
+# Alfresco services. Some installation steps create the top-level directory via
+# sudo; without this correction later steps cannot create component directories
+# below it.
+ensure_alfresco_home() {
+    if [ -z "${ALFRESCO_HOME:-}" ] || [ -z "${ALFRESCO_USER:-}" ] || [ -z "${ALFRESCO_GROUP:-}" ]; then
+        log_error "ALFRESCO_HOME, ALFRESCO_USER, and ALFRESCO_GROUP must be configured"
+        return 1
+    fi
+
+    sudo install -d -o "${ALFRESCO_USER}" -g "${ALFRESCO_GROUP}" -m 755 "${ALFRESCO_HOME}"
+}
+
 backup_file() {
     local file=$1
     local backup_dir=${2:-/tmp/alfresco-backup}

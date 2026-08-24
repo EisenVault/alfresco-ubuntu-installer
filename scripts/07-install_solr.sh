@@ -36,6 +36,10 @@ main() {
     check_sudo
     load_config
     check_prerequisites unzip
+
+    # The configured home may have been created by an earlier sudo command.
+    # Ensure this service user can create the Solr installation below it.
+    ensure_alfresco_home
     
     # Detect architecture for JAVA_HOME
     detect_architecture

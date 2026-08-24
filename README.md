@@ -156,8 +156,8 @@ bash scripts/06-install_alfresco.sh
 #   Solr backend (profiles 7.4 / 23.x / 25.x / 26.1):
 bash scripts/07-install_solr.sh
 #   OpenSearch backend (profile 26.2):
-# bash scripts/07-install_opensearch.sh
-# bash scripts/07b-install_batch_indexer.sh
+# bash scripts/07-DO-NOT-USE-install_opensearch.sh
+# bash scripts/07b-DO-NOT-USE-install_batch_indexer.sh
 
 bash scripts/08-install_transform.sh
 bash scripts/09-build_aca.sh
@@ -208,8 +208,8 @@ alfresco-ubuntu-installer/
 │   ├── 05-download_alfresco_resources.sh  # Download artifacts
 │   ├── 06-install_alfresco.sh   # Alfresco + Share
 │   ├── 07-install_solr.sh       # Alfresco Search Services (solr backend)
-│   ├── 07-install_opensearch.sh # OpenSearch (opensearch backend, 26.2+)
-│   ├── 07b-install_batch_indexer.sh # Batch indexer (opensearch backend, 26.2+)
+│   ├── 07-DO-NOT-USE-install_opensearch.sh # OpenSearch (opensearch backend, 26.2+)
+│   ├── 07b-DO-NOT-USE-install_batch_indexer.sh # Batch Indexer (opensearch backend, 26.2+)
 │   ├── 08-install_transform.sh  # Transform Service
 │   ├── 09-build_aca.sh          # Alfresco Content App
 │   ├── 10-install_nginx.sh      # Nginx reverse proxy
@@ -292,7 +292,7 @@ variable in the active profile (`config/versions.conf`):
 | Backend | Profiles | Components | Install scripts |
 |---------|----------|------------|-----------------|
 | `solr` | 7.4, 23.x, 25.x, 26.1 | Alfresco Search Services (Solr 6) | `07-install_solr.sh` |
-| `opensearch` | 26.2 | OpenSearch + Alfresco Elasticsearch Batch Indexing | `07-install_opensearch.sh`, `07b-install_batch_indexer.sh` |
+| `opensearch` | 26.2 | OpenSearch + Alfresco Elasticsearch Batch Indexing | `07-DO-NOT-USE-install_opensearch.sh`, `07b-DO-NOT-USE-install_batch_indexer.sh` |
 
 With the `opensearch` backend:
 

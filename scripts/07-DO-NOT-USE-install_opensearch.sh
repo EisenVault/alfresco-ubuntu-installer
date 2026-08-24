@@ -16,7 +16,7 @@
 # - sudo privileges
 #
 # Usage:
-#   bash scripts/07-install_opensearch.sh
+#   bash scripts/07-DO-NOT-USE-install_opensearch.sh
 # =============================================================================
 
 # Load common functions and configuration
