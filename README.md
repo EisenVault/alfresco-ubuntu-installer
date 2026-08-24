@@ -164,6 +164,15 @@ bash scripts/09-build_aca.sh
 bash scripts/10-install_nginx.sh
 ```
 
+Step 10 prompts for the public DNS name to use in Nginx and saves it as
+`NGINX_SERVER_NAME` in `config/alfresco.env`. Enter a hostname such as
+`alfresco.example.com`; do not enter a URL. For a non-localhost name, it also
+offers to install Certbot, request a Let's Encrypt certificate, and redirect
+HTTP traffic to HTTPS. It saves the choice and expiry-notification email as
+`LETSENCRYPT_ENABLED` and `LETSENCRYPT_EMAIL` in the environment file. Before
+accepting the prompt, ensure DNS for the hostname points to this server and
+port 80 is publicly reachable.
+
 ### 4. Start Services
 
 ```bash

@@ -38,6 +38,8 @@ main() {
     check_root
     check_sudo
     load_config
+    prompt_nginx_server_name
+    prompt_letsencrypt_settings
     
     # Install Nginx
     install_nginx
@@ -58,11 +60,146 @@ main() {
 
     # Reload changes
     start_or_reload_service    
+
+    # Obtain and install a public TLS certificate after Nginx is reachable on
+    # HTTP so Certbot can complete the ACME HTTP-01 challenge.
+    request_letsencrypt_certificate
     
     # Verify installation
     verify_installation
     
     log_info "Nginx installation completed successfully!"
+}
+
+# -----------------------------------------------------------------------------
+# Public DNS Name
+# -----------------------------------------------------------------------------
+prompt_nginx_server_name() {
+    local selected_name
+
+    while true; do
+        read -r -p "Public DNS name for Alfresco [${NGINX_SERVER_NAME}]: " selected_name
+        selected_name="${selected_name:-$NGINX_SERVER_NAME}"
+
+        # Allow localhost for private/test deployments, plus DNS names and IPv4
+        # addresses. Reject URLs and shell/Nginx configuration characters.
+        if [ "$selected_name" != "localhost" ] && ! [[ "$selected_name" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$ ]]; then
+            log_error "Enter a hostname only (for example: alfresco.example.com), not a URL."
+            continue
+        fi
+
+        NGINX_SERVER_NAME="$selected_name"
+        persist_nginx_server_name
+
+        if [ "$NGINX_SERVER_NAME" = "localhost" ]; then
+            log_warn "localhost cannot receive a Let's Encrypt certificate."
+        else
+            log_info "Using public DNS name: ${NGINX_SERVER_NAME}"
+        fi
+        return
+    done
+}
+
+persist_environment_value() {
+    local key=$1
+    local value=$2
+    local env_file="${CONFIG_DIR}/alfresco.env"
+    local temp_file
+    local shell_value
+
+    printf -v shell_value '%q' "$value"
+
+    temp_file=$(mktemp "${CONFIG_DIR}/alfresco.env.XXXXXX")
+    awk -v key="$key" -v value="$shell_value" '
+        $0 ~ "^export " key "=" {
+            print "export " key "=" value
+            updated = 1
+            next
+        }
+        { print }
+        END {
+            if (!updated) {
+                print "export " key "=" value
+            }
+        }
+    ' "$env_file" > "$temp_file"
+
+    chmod 600 "$temp_file"
+    mv "$temp_file" "$env_file"
+    log_info "Updated ${key} in ${env_file}"
+}
+
+persist_nginx_server_name() {
+    persist_environment_value "NGINX_SERVER_NAME" "$NGINX_SERVER_NAME"
+}
+
+prompt_letsencrypt_settings() {
+    local answer
+    local entered_email
+    local default_answer="y"
+
+    if [ "$NGINX_SERVER_NAME" = "localhost" ]; then
+        LETSENCRYPT_ENABLED="false"
+        persist_environment_value "LETSENCRYPT_ENABLED" "$LETSENCRYPT_ENABLED"
+        return
+    fi
+
+    if [ "${LETSENCRYPT_ENABLED:-}" = "false" ]; then
+        default_answer="n"
+    fi
+
+    if [ "$default_answer" = "y" ]; then
+        read -r -p "Request a Let's Encrypt certificate for ${NGINX_SERVER_NAME}? [Y/n]: " answer
+    else
+        read -r -p "Request a Let's Encrypt certificate for ${NGINX_SERVER_NAME}? [y/N]: " answer
+    fi
+    answer="${answer:-$default_answer}"
+
+    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        LETSENCRYPT_ENABLED="false"
+        persist_environment_value "LETSENCRYPT_ENABLED" "$LETSENCRYPT_ENABLED"
+        log_info "Let's Encrypt certificate request skipped"
+        return
+    fi
+
+    while true; do
+        read -r -p "Email for Let's Encrypt expiry notices [${LETSENCRYPT_EMAIL:-}]: " entered_email
+        LETSENCRYPT_EMAIL="${entered_email:-${LETSENCRYPT_EMAIL:-}}"
+        if [[ "$LETSENCRYPT_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+            break
+        fi
+        log_error "Enter a valid email address for Let's Encrypt notifications."
+    done
+
+    LETSENCRYPT_ENABLED="true"
+    persist_environment_value "LETSENCRYPT_ENABLED" "$LETSENCRYPT_ENABLED"
+    persist_environment_value "LETSENCRYPT_EMAIL" "$LETSENCRYPT_EMAIL"
+}
+
+request_letsencrypt_certificate() {
+    if [ "${LETSENCRYPT_ENABLED:-false}" != "true" ]; then
+        return
+    fi
+
+    log_step "Requesting Let's Encrypt certificate..."
+    log_info "Domain: ${NGINX_SERVER_NAME}"
+
+    sudo apt-get update
+    sudo apt-get install -y certbot python3-certbot-nginx
+
+    if ! sudo certbot --nginx --non-interactive --agree-tos \
+        --email "$LETSENCRYPT_EMAIL" --redirect --keep-until-expiring \
+        -d "$NGINX_SERVER_NAME"; then
+        log_error "Let's Encrypt certificate request failed."
+        log_error "Confirm DNS for ${NGINX_SERVER_NAME} points to this server and port 80 is publicly reachable."
+        return 1
+    fi
+
+    sudo nginx -t
+    if systemctl list-unit-files certbot.timer &>/dev/null; then
+        sudo systemctl enable --now certbot.timer
+    fi
+    log_info "Let's Encrypt certificate installed and HTTP requests redirect to HTTPS"
 }
 
 # -----------------------------------------------------------------------------
@@ -405,7 +542,16 @@ start_or_reload_service() {
         sudo systemctl reload nginx
     else
         log_info "Starting Nginx..."
-        sudo systemctl start nginx
+        if ! sudo systemctl start nginx; then
+            log_error "Nginx failed to start. Recent service diagnostics:"
+            sudo systemctl status nginx --no-pager -l || true
+            sudo journalctl -u nginx --no-pager -n 30 || true
+            if command -v ss &> /dev/null; then
+                log_info "Processes listening on HTTP/HTTPS ports:"
+                sudo ss -ltnp '( sport = :80 or sport = :443 )' || true
+            fi
+            return 1
+        fi
     fi
     
     log_info "Nginx is now serving the new configuration"
