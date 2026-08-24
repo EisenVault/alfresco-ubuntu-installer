@@ -38,7 +38,8 @@ main() {
     
     # Pre-flight checks
     load_config
-    check_prerequisites curl zip
+    install_archive_utilities
+    check_prerequisites curl unzip
     
     # Determine versions
     determine_versions
@@ -63,6 +64,26 @@ main() {
     verify_downloads
     
     log_info "All Alfresco resources downloaded successfully!"
+}
+
+# -----------------------------------------------------------------------------
+# Archive Utilities
+# -----------------------------------------------------------------------------
+install_archive_utilities() {
+    local packages=()
+
+    command -v zip >/dev/null 2>&1 || packages+=(zip)
+    command -v unzip >/dev/null 2>&1 || packages+=(unzip)
+
+    if [ "${#packages[@]}" -eq 0 ]; then
+        log_info "ZIP utilities are already installed"
+        return
+    fi
+
+    check_sudo
+    log_step "Installing required archive utilities: ${packages[*]}"
+    sudo apt-get update
+    sudo apt-get install -y "${packages[@]}"
 }
 
 # -----------------------------------------------------------------------------
