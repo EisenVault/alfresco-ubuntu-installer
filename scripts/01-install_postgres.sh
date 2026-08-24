@@ -218,6 +218,7 @@ create_alfresco_database() {
     # Create database if not exists
     if pg_database_exists "${ALFRESCO_DB_NAME}"; then
         log_info "Database '${ALFRESCO_DB_NAME}' already exists"
+        warn_if_existing_alfresco_repository
     else
         log_info "Creating database '${ALFRESCO_DB_NAME}'..."
         pg_execute "CREATE DATABASE ${ALFRESCO_DB_NAME} OWNER ${ALFRESCO_DB_USER} ENCODING 'UTF8';"
@@ -236,6 +237,21 @@ create_alfresco_database() {
     fi
     
     log_info "Database configuration completed"
+}
+
+# A repository database and its dir.root content store are a matched pair.  A
+# previous database with a newly-created (empty) alf_data directory will cause
+# Alfresco to fail at startup with ConfigurationChecker's "dir.root" error.
+warn_if_existing_alfresco_repository() {
+    local node_count
+    node_count=$(sudo -u postgres psql -d "${ALFRESCO_DB_NAME}" -tAc \
+        "SELECT count(*) FROM alf_node" 2>/dev/null || true)
+
+    if [[ "$node_count" =~ ^[1-9][0-9]*$ ]]; then
+        log_warn "Existing Alfresco repository detected (${node_count} nodes)."
+        log_warn "Do not pair this database with a new or empty ${ALFRESCO_HOME}/alf_data directory."
+        log_warn "Restore the matching alf_data backup, or use a new empty database for a fresh installation."
+    fi
 }
 
 # -----------------------------------------------------------------------------
