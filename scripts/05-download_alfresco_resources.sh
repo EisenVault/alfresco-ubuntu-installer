@@ -74,9 +74,9 @@ determine_versions() {
     if [ "${USE_LATEST_VERSIONS:-false}" = "true" ]; then
         log_warn "USE_LATEST_VERSIONS is enabled - fetching latest versions..."
         
-        ALFRESCO_VERSION_ACTUAL=$(fetch_latest_nexus_version "alfresco-content-services-community-distribution")
-        ALFRESCO_SEARCH_VERSION_ACTUAL=$(fetch_latest_nexus_version "alfresco-search-services")
-        ALFRESCO_TRANSFORM_VERSION_ACTUAL=$(fetch_latest_nexus_version "alfresco-transform-core-aio")
+        ALFRESCO_VERSION_ACTUAL=$(fetch_latest_nexus_version "alfresco-content-services-community-distribution" "${ALFRESCO_VERSION%.*}")
+        ALFRESCO_SEARCH_VERSION_ACTUAL=$(fetch_latest_nexus_version "alfresco-search-services" "${ALFRESCO_SEARCH_VERSION%.*}")
+        ALFRESCO_TRANSFORM_VERSION_ACTUAL=$(fetch_latest_nexus_version "alfresco-transform-core-aio" "${ALFRESCO_TRANSFORM_VERSION%.*}")
         
         # Fall back to pinned versions if fetch fails
         ALFRESCO_VERSION_ACTUAL="${ALFRESCO_VERSION_ACTUAL:-$ALFRESCO_VERSION}"
@@ -106,13 +106,23 @@ determine_versions() {
 # -----------------------------------------------------------------------------
 fetch_latest_nexus_version() {
     local artifact=$1
+    local version_series=${2:-}
     local browse_url="${NEXUS_BROWSE_URL}/${artifact}/"
-    
-    curl -s "$browse_url" \
+
+    local versions
+    versions=$(curl -s "$browse_url" \
         | sed -n 's/.*<a href="\(.*\)\/">.*/\1/p' \
         | grep -E '^[0-9]+(\.[0-9]+)*$' \
-        | sort -V \
-        | tail -n 1
+        || true)
+
+    # A profile defines a compatibility series, e.g. 26.1 or 5.4. Do not
+    # silently upgrade to a different Alfresco/component release line.
+    if [ -n "$version_series" ]; then
+        local escaped_series=${version_series//./\\.}
+        versions=$(printf '%s\n' "$versions" | grep -E "^${escaped_series}\\.[0-9]+$" || true)
+    fi
+
+    printf '%s\n' "$versions" | sort -V | tail -n 1
 }
 
 # -----------------------------------------------------------------------------

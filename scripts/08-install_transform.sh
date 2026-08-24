@@ -290,10 +290,12 @@ install_pdf_renderer() {
     local pdf_renderer_version
 
     if [ "${USE_LATEST_VERSIONS:-false}" = "true" ]; then
-        log_info "Fetching latest PDF Renderer version..."
+        local escaped_version=${ALFRESCO_PDF_RENDERER_VERSION//./\\.}
+        log_info "Fetching latest compatible PDF Renderer version..."
         pdf_renderer_version=$(curl -s "${NEXUS_BASE_URL}/service/rest/repository/browse/releases/org/alfresco/alfresco-pdf-renderer/" \
             | sed -n 's/.*<a href="\([^"]*\)\/">.*/\1/p' \
             | grep -E '^[0-9]+(\.[0-9]+)*$' \
+            | grep -E "^${escaped_version}(\\.[0-9]+)?$" \
             | sort -V \
             | tail -n 1)
     fi

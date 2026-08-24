@@ -151,16 +151,19 @@ checkout_version() {
     local target_version
     
     if [ "${USE_LATEST_VERSIONS:-false}" = "true" ]; then
-        log_info "Fetching latest version tag..."
+        local version_series="${ACA_VERSION%.*}"
+        local escaped_series=${version_series//./\\.}
+        log_info "Fetching latest compatible ${version_series}.x version tag..."
         target_version=$(git ls-remote --tags --sort="v:refname" "$ACA_REPO_URL" \
             | grep -oP 'refs/tags/\K[0-9]+\.[0-9]+\.[0-9]+$' \
+            | grep -E "^${escaped_series}\\.[0-9]+$" \
             | tail -n 1)
         
         if [ -z "$target_version" ]; then
             log_warn "Could not fetch latest version, using pinned version"
             target_version="$ACA_VERSION"
         else
-            log_warn "Using latest ACA version: $target_version (pinned was: $ACA_VERSION)"
+            log_warn "Using latest compatible ACA version: $target_version (pinned was: $ACA_VERSION)"
         fi
     else
         target_version="$ACA_VERSION"

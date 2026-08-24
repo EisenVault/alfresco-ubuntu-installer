@@ -256,7 +256,7 @@ Select a profile during configuration:
 # List available profiles
 bash scripts/00-generate-config.sh --list-profiles
 
-# Use default (23.x)
+# Use default (26.1, latest compatible patch releases)
 bash scripts/00-generate-config.sh
 
 # Use Alfresco 7.4 (legacy support)
@@ -272,7 +272,12 @@ bash scripts/00-generate-config.sh --profile 26.1
 bash scripts/00-generate-config.sh --profile 26.2
 ```
 
-The default profile remains `23.x`. The `26.1` profile updates the frontend stack
+The default profile is `26.1`. It enables `USE_LATEST_VERSIONS`, so each installation
+step fetches the latest patch release within its profile-supported compatibility
+series (for example ACS 26.1.x, Tomcat 10.1.x, ActiveMQ 6.2.x, and ACA 7.3.x).
+Ubuntu packages provide the latest available PostgreSQL 16.x, Java 21.x, and Node 24.x
+patches. Set `USE_LATEST_VERSIONS="false"` in `config/versions.conf` to use the
+profile's exact pinned artifact versions. The `26.1` profile updates the frontend stack
 to ACA `7.3.0` with Node.js `24` and Java `21`. The `26.2` profile builds on that
 and switches the search backend to OpenSearch (see [Search Backends](#search-backends)).
 It also ships a standalone secure Share WAR (`26.2.1.2`) that overrides the

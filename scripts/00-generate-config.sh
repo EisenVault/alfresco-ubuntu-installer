@@ -138,7 +138,9 @@ select_profile() {
 # -----------------------------------------------------------------------------
 main() {
     local force=false
-    local profile="23.x"  # Default profile
+    # Default to the current supported ACS release line. Individual installer
+    # scripts resolve the latest compatible patch releases by default.
+    local profile="26.1"
     local env_only=false
     
     # Parse arguments

@@ -115,11 +115,14 @@ determine_version() {
 # Fetch Latest Tomcat Version
 # -----------------------------------------------------------------------------
 fetch_latest_tomcat_version() {
+    local version_series="${TOMCAT_VERSION%.*}"
+    local escaped_series=${version_series//./\\.}
     curl -s "https://dlcdn.apache.org/tomcat/tomcat-${TOMCAT_MAJOR_VERSION}/" | \
         grep -oP "v[0-9]+\.[0-9]+\.[0-9]+" | \
+        sed 's/v//' | \
+        grep -E "^${escaped_series}\\.[0-9]+$" | \
         sort -V | \
-        tail -1 | \
-        sed 's/v//'
+        tail -1
 }
 
 # -----------------------------------------------------------------------------

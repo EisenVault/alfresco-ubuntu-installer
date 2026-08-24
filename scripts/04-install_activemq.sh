@@ -93,8 +93,25 @@ detect_architecture() {
 # -----------------------------------------------------------------------------
 determine_version() {
     log_step "Determining ActiveMQ version..."
-    
+
     ACTIVEMQ_VERSION_ACTUAL="$ACTIVEMQ_VERSION"
+    if [ "${USE_LATEST_VERSIONS:-false}" = "true" ]; then
+        local version_series="${ACTIVEMQ_VERSION%.*}"
+        local escaped_series=${version_series//./\\.}
+        local latest_version
+        latest_version=$(curl -fsSL "https://dlcdn.apache.org/activemq/" \
+            | grep -oP 'href="[0-9]+\.[0-9]+\.[0-9]+/' \
+            | cut -d'"' -f2 | tr -d '/' \
+            | grep -E "^${escaped_series}\\.[0-9]+$" \
+            | sort -V | tail -1 || true)
+        if [ -n "$latest_version" ]; then
+            ACTIVEMQ_VERSION_ACTUAL="$latest_version"
+            log_info "Using latest compatible ActiveMQ version: $ACTIVEMQ_VERSION_ACTUAL"
+            return
+        fi
+        log_warn "Could not fetch the latest ActiveMQ ${version_series}.x version; using pinned ${ACTIVEMQ_VERSION}"
+    fi
+
     log_info "Using pinned ActiveMQ version: $ACTIVEMQ_VERSION_ACTUAL"
 }
 
