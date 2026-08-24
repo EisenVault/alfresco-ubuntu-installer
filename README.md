@@ -162,6 +162,7 @@ bash scripts/07-install_solr.sh
 bash scripts/08-install_transform.sh
 bash scripts/09-build_aca.sh
 bash scripts/10-install_nginx.sh
+bash scripts/16-install_management_scripts.sh
 ```
 
 Step 10 prompts for the public DNS name to use in Nginx and saves it as
@@ -172,6 +173,17 @@ HTTP traffic to HTTPS. It saves the choice and expiry-notification email as
 `LETSENCRYPT_ENABLED` and `LETSENCRYPT_EMAIL` in the environment file. Before
 accepting the prompt, ensure DNS for the hostname points to this server and
 port 80 is publicly reachable.
+
+Step 16 copies the start, stop, and backup scripts (plus the configuration
+they require) to `${ALFRESCO_HOME}/scripts`. Thereafter, use:
+
+```bash
+bash /opt/eisenvault_installations/eisenvault-alfresco-26_2/scripts/11-start_services.sh
+bash /opt/eisenvault_installations/eisenvault-alfresco-26_2/scripts/12-stop_services.sh
+bash /opt/eisenvault_installations/eisenvault-alfresco-26_2/scripts/13-backup.sh
+```
+
+Run Step 16 again after changing `config/alfresco.env` in the installer checkout.
 
 ### 4. Start Services
 
@@ -971,7 +983,7 @@ flowchart TB
 bash scripts/00-generate-config.sh
 ```
 
-This creates `config/alfresco.env` with secure random passwords. Review and customize if needed:
+This creates `config/alfresco.env` and securely prompts for the Alfresco admin password. Review and customize it if needed:
 
 ```bash
 cat config/alfresco.env
