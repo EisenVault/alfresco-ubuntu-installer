@@ -142,9 +142,15 @@ configure_authentication() {
     
     # Backup original configuration
     backup_file "$pg_hba_file"
+
+    # PostgreSQL 12 defaults to MD5 password verifiers. An MD5 verifier cannot
+    # authenticate through the SCRAM rules below, so make SCRAM the cluster
+    # default before this script creates or updates the Alfresco role. PostgreSQL
+    # has supported SCRAM since version 10.
+    sudo -u postgres psql -c "ALTER SYSTEM SET password_encryption = 'scram-sha-256';"
     
     # Check if already configured for Alfresco
-    if grep -q "# Alfresco Configuration" "$pg_hba_file"; then
+    if sudo grep -q "# Alfresco Configuration" "$pg_hba_file"; then
         log_info "PostgreSQL authentication already configured for Alfresco"
         return 0
     fi
@@ -161,7 +167,7 @@ configure_authentication() {
 host    alfresco        alfresco        127.0.0.1/32            scram-sha-256\
 host    alfresco        alfresco        ::1/128                 scram-sha-256\
 local   alfresco        alfresco                                md5' "$pg_hba_file"
-    
+
     log_info "Authentication configured successfully"
 }
 
@@ -335,7 +341,9 @@ verify_installation() {
     fi
     
     # Check database connectivity
-    if PGPASSWORD="${ALFRESCO_DB_PASSWORD}" psql -h localhost -U "${ALFRESCO_DB_USER}" -d "${ALFRESCO_DB_NAME}" -c "SELECT 1" &>/dev/null; then
+    # Use IPv4 explicitly so verification follows the HBA rule installed above
+    # and capture the client error rather than hiding the reason for a failure.
+    if PGPASSWORD="${ALFRESCO_DB_PASSWORD}" psql -h 127.0.0.1 -U "${ALFRESCO_DB_USER}" -d "${ALFRESCO_DB_NAME}" -c "SELECT 1"; then
         log_info "Database connection successful"
     else
         log_error "Cannot connect to database"
