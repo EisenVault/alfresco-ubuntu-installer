@@ -398,6 +398,12 @@ server {
     # ---------------------------------------------------------------------
     # Alfresco Repository Proxy
     # ---------------------------------------------------------------------
+    # Without this exact-match redirect, /alfresco is handled by the ACA SPA
+    # fallback instead of the repository proxy and appears as a 404.
+    location = /alfresco {
+        return 301 /alfresco/;
+    }
+
     location /alfresco/ {
         proxy_pass http://alfresco_backend;
         
@@ -420,6 +426,11 @@ server {
     # ---------------------------------------------------------------------
     # Alfresco Share Proxy
     # ---------------------------------------------------------------------
+    # As above, preserve the trailing slash required by the proxy location.
+    location = /share {
+        return 301 /share/;
+    }
+
     location /share/ {
         proxy_pass http://alfresco_backend;
     }

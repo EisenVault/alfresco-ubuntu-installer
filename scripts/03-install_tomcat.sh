@@ -42,6 +42,7 @@ main() {
     install_tomcat
     
     # Configure Tomcat
+    configure_reverse_proxy
     configure_permissions
     create_systemd_service
     
@@ -219,6 +220,28 @@ install_tomcat() {
 }
 
 # -----------------------------------------------------------------------------
+# Configure public HTTPS reverse proxy support
+# -----------------------------------------------------------------------------
+configure_reverse_proxy() {
+    local tomcat_home="${ALFRESCO_HOME}/tomcat"
+    local server_xml="${tomcat_home}/conf/server.xml"
+
+    # Nginx terminates TLS and proxies to Tomcat over HTTP.  Tomcat must still
+    # know its public origin so Share's CSRF referer validation and generated
+    # URLs use HTTPS rather than the internal HTTP connector.
+    if [ "${ALFRESCO_PROTOCOL}" != "https" ]; then
+        return 0
+    fi
+
+    if ! sudo sed -i -E "/<Connector port=\"${TOMCAT_HTTP_PORT}\" protocol=\"HTTP\/1\\.1\"/ s#<Connector port=\"${TOMCAT_HTTP_PORT}\" protocol=\"HTTP/1.1\"#<Connector port=\"${TOMCAT_HTTP_PORT}\" protocol=\"HTTP/1.1\" scheme=\"https\" secure=\"true\" proxyName=\"${ALFRESCO_HOST}\" proxyPort=\"${ALFRESCO_PORT}\"#" "$server_xml"; then
+        log_error "Failed to configure Tomcat's HTTPS reverse-proxy connector"
+        exit 1
+    fi
+
+    log_info "Configured Tomcat for https://${ALFRESCO_HOST}:${ALFRESCO_PORT}"
+}
+
+# -----------------------------------------------------------------------------
 # Configure Permissions
 # -----------------------------------------------------------------------------
 configure_permissions() {
@@ -275,6 +298,7 @@ Environment="JAVA_HOME=${JAVA_HOME_PATH}"
 Environment="CATALINA_PID=${tomcat_home}/temp/tomcat.pid"
 Environment="CATALINA_HOME=${tomcat_home}"
 Environment="CATALINA_BASE=${tomcat_home}"
+WorkingDirectory=${tomcat_home}/logs
 
 # Memory settings - auto-calculated based on system RAM (${MEM_PROFILE} profile)
 Environment="CATALINA_OPTS=-Xms${MEM_TOMCAT_XMS}m -Xmx${MEM_TOMCAT_XMX}m -server -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"
