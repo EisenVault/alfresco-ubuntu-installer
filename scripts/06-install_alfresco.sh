@@ -475,6 +475,14 @@ share.port=${SHARE_PORT}
 share.protocol=${SHARE_PROTOCOL}
 
 # -----------------------------------------------------------------------------
+# ONLYOFFICE Share Preview
+# -----------------------------------------------------------------------------
+# When the official ONLYOFFICE AMPs are installed, render supported Office and
+# PDF documents in the embedded ONLYOFFICE viewer instead of Share's PDF.js
+# previewer. This property is ignored when ONLYOFFICE is not installed.
+onlyoffice.webpreview=${ONLYOFFICE_WEBPREVIEW:-true}
+
+# -----------------------------------------------------------------------------
 # CSRF Filter Configuration
 # -----------------------------------------------------------------------------
 csrf.filter.enabled=true

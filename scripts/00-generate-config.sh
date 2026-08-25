@@ -395,6 +395,13 @@ export SHARE_HOST="localhost"
 export SHARE_PORT="8080"
 
 # -----------------------------------------------------------------------------
+# ONLYOFFICE Configuration
+# -----------------------------------------------------------------------------
+# Used when the official ONLYOFFICE repository and Share AMPs are installed.
+# Render supported Office and PDF documents in the embedded ONLYOFFICE viewer.
+export ONLYOFFICE_WEBPREVIEW="true"
+
+# -----------------------------------------------------------------------------
 # Memory Settings (Auto-calculated based on system RAM if not set)
 # -----------------------------------------------------------------------------
 # Memory is automatically allocated based on total system RAM:
