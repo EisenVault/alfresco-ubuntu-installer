@@ -249,8 +249,9 @@ create_systemd_service() {
 [Unit]
 Description=Alfresco Search Services (Solr)
 Documentation=https://docs.alfresco.com/search-services/latest/
-After=network.target tomcat.service
-Requires=tomcat.service
+# Solr is independent of Tomcat.  Coupling it with Requires=tomcat.service
+# makes systemd stop the search service whenever Tomcat is restarted.
+After=network.target
 
 [Service]
 Type=forking
