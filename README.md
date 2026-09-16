@@ -163,6 +163,8 @@ bash scripts/08-install_transform.sh
 bash scripts/09-build_aca.sh
 bash scripts/10-install_nginx.sh
 bash scripts/16-install_management_scripts.sh
+# Optional: required before enabling EisenVault ClamAV/XSS scanning
+bash scripts/17-install_security_scanning.sh
 ```
 
 Step 10 prompts for the public DNS name to use in Nginx and saves it as
@@ -239,6 +241,7 @@ alfresco-ubuntu-installer/
 │   ├── 13-backup.sh             # Backup Alfresco data
 │   ├── 14-restore.sh            # Restore from backup
 │   └── 15-install_addons.sh     # Install add-ons (AMPs/JARs)
+│   └── 17-install_security_scanning.sh # ClamAV/XSS scanning dependencies
 ├── downloads/                   # Downloaded artifacts (gitignored)
 ├── .github/workflows/
 │   └── ci.yml                   # CI/CD pipeline

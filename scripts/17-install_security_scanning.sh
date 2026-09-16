@@ -17,6 +17,7 @@ install_dependencies() {
 
     sudo apt-get update
     sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        binutils \
         clamav-daemon \
         clamav-freshclam \
         poppler-utils
